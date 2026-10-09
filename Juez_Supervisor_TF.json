@@ -1,0 +1,513 @@
+{
+  "name": "Juez_Supervisor_TF",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Juez Supervisor (AI-as-a-Judge)\nSub-workflow independiente, llamado desde el Manager antes de\nentregar cualquier respuesta. Evalúa la respuesta propuesta,\nSIEMPRE registra su veredicto en Airtable (auditoría obligatoria),\ny devuelve {exactitud_factual, estado_veredicto, critica} para\nque el Manager decida la ruta (Switch vive en el Manager, no acá).\n\nAlcance mínimo del checkpoint — no agrega nada fuera de esto.",
+        "height": 220,
+        "width": 480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        -32
+      ],
+      "typeVersion": 1,
+      "id": "544ec5aa-9a02-4e10-8beb-5653c4fcc694",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "session_id"
+            },
+            {
+              "name": "query"
+            },
+            {
+              "name": "contexto"
+            },
+            {
+              "name": "respuesta_propuesta"
+            },
+            {
+              "name": "intento_actual",
+              "type": "number"
+            },
+            {
+              "name": "canal"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        256
+      ],
+      "id": "96b93bd9-7681-4a12-b4fe-748c7c44646b",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-4-5-20250929",
+          "mode": "list",
+          "cachedResultName": "Claude Sonnet 4.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        224,
+        416
+      ],
+      "id": "db092cc2-f44f-4868-ad42-ee1cb57a5cb7",
+      "name": "Chat Model Juez",
+      "credentials": {
+        "anthropicApi": {
+          "id": "JyWxzw01lz1bdbp5",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"exactitud_factual\": {\n      \"type\": \"integer\",\n      \"minimum\": 1,\n      \"maximum\": 5,\n      \"description\": \"1 = totalmente incorrecta o inventada. 5 = exacta, respaldada al 100% por el contexto provisto.\"\n    },\n    \"estado_veredicto\": {\n      \"type\": \"string\",\n      \"enum\": [\"ACEPTADO\", \"CORREGIR\", \"RECHAZADO\"],\n      \"description\": \"ACEPTADO si exactitud_factual >= 4. CORREGIR si la respuesta tiene un error puntual corregible (exactitud 2-3). RECHAZADO si la respuesta es peligrosa, inventa datos críticos, o exactitud_factual = 1.\"\n    },\n    \"critica\": {\n      \"type\": \"string\",\n      \"description\": \"Explicación breve (máx 2 oraciones) de qué está mal, para que el agente pueda corregir si estado_veredicto es CORREGIR. Vacío si ACEPTADO.\"\n    }\n  },\n  \"required\": [\"exactitud_factual\", \"estado_veredicto\", \"critica\"]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        528,
+        416
+      ],
+      "id": "e70c2843-47be-4b29-aded-e750f12d3329",
+      "name": "Parser Veredicto Juez"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'QUERY ORIGINAL DEL USUARIO:\\n' + $json.query + '\\n\\nCONTEXTO RECUPERADO (datos reales de Airtable / RAG que la respuesta debería reflejar):\\n' + $json.contexto + '\\n\\nRESPUESTA PROPUESTA POR EL AGENTE (a evaluar):\\n' + $json.respuesta_propuesta }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Sos un Juez de Calidad (QA Supervisor) para un sistema de automatización de RRHH y Soporte técnico interno. Tu ÚNICA salida permitida es el objeto JSON estructurado que se te exige — nunca texto libre, nunca explicaciones fuera del JSON.\n\nEvaluá ÚNICAMENTE si la RESPUESTA PROPUESTA es factualmente consistente con el CONTEXTO RECUPERADO — no evalúes estilo, tono ni redacción.\n\nCriterio de exactitud_factual (1 a 5):\n- 5: cada dato de la respuesta está respaldado exactamente por el contexto.\n- 4: correcta en lo esencial, con una imprecisión menor no crítica.\n- 3: tiene un error puntual corregible (un número, una condición) que un reintento con la crítica podría arreglar.\n- 2: mezcla información correcta con un error significativo.\n- 1: contradice el contexto, inventa datos, o el contexto no respalda nada de lo dicho.\n\nCriterio de estado_veredicto:\n- ACEPTADO: exactitud_factual es 4 o 5.\n- CORREGIR: exactitud_factual es 2 o 3 — el error es puntual y corregible con una nueva redacción.\n- RECHAZADO: exactitud_factual es 1, o la respuesta involucra un dato sensible (montos, aprobaciones, datos personales de terceros) que no puede quedar librado a un reintento automático.\n\nSi el CONTEXTO viene vacío o irrelevante y la respuesta es \"No sé\" o equivalente, eso es CORRECTO — asigná exactitud_factual 5 y ACEPTADO (evitar alucinar es el comportamiento deseado, no un error).",
+          "maxIterations": 2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        224,
+        256
+      ],
+      "id": "73649b5e-2ac3-4d59-92bd-1d1b6a3e7deb",
+      "name": "Juez LLM"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appJsECkQCx16ErCj",
+          "mode": "list",
+          "cachedResultName": "Auditoria_Juez",
+          "cachedResultUrl": "https://airtable.com/appJsECkQCx16ErCj"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl2MOOe9FEQueCt6",
+          "mode": "list",
+          "cachedResultName": "Auditoria_Juez",
+          "cachedResultUrl": "https://airtable.com/appJsECkQCx16ErCj/tbl2MOOe9FEQueCt6"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "session_ID": "={{ $('Execute Workflow Trigger').item.json.session_id }}",
+            "query": "={{ $('Execute Workflow Trigger').item.json.query }}",
+            "respuesta_evaluada": "={{ $('Execute Workflow Trigger').item.json.respuesta_propuesta }}",
+            "exactitud_factual": "={{ $json.output.exactitud_factual }}",
+            "estado_veredicto": "={{ $json.output.estado_veredicto }}",
+            "critica": "={{ $json.output.critica }}",
+            "intento": "={{ $('Execute Workflow Trigger').item.json.intento_actual }}",
+            "fecha_hora": "={{ $now.toISO() }}",
+            "Canal": "={{ $('Execute Workflow Trigger').item.json.canal || '' }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "session_ID",
+              "displayName": "session_ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "query",
+              "displayName": "query",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "respuesta_evaluada",
+              "displayName": "respuesta_evaluada",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "exactitud_factual",
+              "displayName": "exactitud_factual",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "estado_veredicto",
+              "displayName": "estado_veredicto",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "critica",
+              "displayName": "critica",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "intento",
+              "displayName": "intento",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "fecha_hora",
+              "displayName": "fecha_hora",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Canal",
+              "displayName": "Canal",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        608,
+        208
+      ],
+      "id": "4e6bf7c0-0276-4217-ab92-d9da81e821be",
+      "name": "Registrar Veredicto en Auditoria",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "5xs9oDCnX4SDvjeO",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Obligatorio segun la consigna ('no registrar el veredicto rompe el requisito de auditoria'). SIEMPRE se ejecuta, para los 3 veredictos por igual -- va antes de la salida, no despues del Switch."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s1",
+              "name": "exactitud_factual",
+              "value": "={{ $('Juez LLM').item.json.output.exactitud_factual }}",
+              "type": "number"
+            },
+            {
+              "id": "s2",
+              "name": "estado_veredicto",
+              "value": "={{ $('Juez LLM').item.json.output.estado_veredicto }}",
+              "type": "string"
+            },
+            {
+              "id": "s3",
+              "name": "critica",
+              "value": "={{ $('Juez LLM').item.json.output.critica }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        192
+      ],
+      "id": "218ee2e1-7816-40a4-a0df-e373878481d7",
+      "name": "Formatear Salida del Juez"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        256
+      ],
+      "id": "0e6b7778-df76-4f38-87c0-25cb109c9afe",
+      "name": "🏁 Salida del Juez"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "al1",
+              "name": "workflow_origen",
+              "value": "Juez_Supervisor",
+              "type": "string"
+            },
+            {
+              "id": "al2",
+              "name": "nodo_origen",
+              "value": "Registrar Veredicto en Auditoria",
+              "type": "string"
+            },
+            {
+              "id": "al3",
+              "name": "mensaje_error",
+              "value": "={{ $json.error?.message || JSON.stringify($json) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        816,
+        400
+      ],
+      "id": "6944680d-569d-45d8-9a44-4218319f7e9c",
+      "name": "Preparar Alerta"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "ylm6UFsYTKsnMMsF"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "workflow_origen": "={{ $json.workflow_origen }}",
+            "nodo_origen": "={{ $json.nodo_origen }}",
+            "mensaje_error": "={{ $json.mensaje_error }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "workflow_origen",
+              "displayName": "workflow_origen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "nodo_origen",
+              "displayName": "nodo_origen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "mensaje_error",
+              "displayName": "mensaje_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        976,
+        416
+      ],
+      "id": "3f9249ff-4818-432f-9be4-a7e08ab27d1e",
+      "name": "Ejecutar Alerta de Fallo"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Juez LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model Juez": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Juez LLM",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser Veredicto Juez": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Juez LLM",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Juez LLM": {
+      "main": [
+        [
+          {
+            "node": "Registrar Veredicto en Auditoria",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Veredicto en Auditoria": {
+      "main": [
+        [
+          {
+            "node": "Formatear Salida del Juez",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Alerta",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Formatear Salida del Juez",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatear Salida del Juez": {
+      "main": [
+        [
+          {
+            "node": "🏁 Salida del Juez",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Alerta": {
+      "main": [
+        [
+          {
+            "node": "Ejecutar Alerta de Fallo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "2ea3eab6-2695-4c8c-bfa7-6b217b6d05d9",
+  "meta": {
+    "instanceId": "971c7d1a0870c5402daced6091d65ef2a98bf7cf01af8640ad658b5b54739728"
+  },
+  "id": "v3lz2Q3ExCwc0KOy",
+  "tags": []
+}

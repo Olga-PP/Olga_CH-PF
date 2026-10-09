@@ -1,0 +1,277 @@
+{
+  "name": "Consulta_RAG_TF",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🔎 Consulta (correr DESPUÉS de la Ingesta, misma instancia de n8n)\n\nAbrí el panel de Chat de este workflow y probá las 5 preguntas ciegas ahí — así generás las capturas reales que pide el brief.\n\nComparte el `memoryKey` `manual_licencias_vacaciones_kb` con el workflow de Ingesta — por eso encuentra lo que el otro cargó, mientras ambos corran en la misma instancia sin reiniciar.",
+        "height": 240,
+        "width": 480,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "bf642903-aa5c-45b3-94ec-9d6f04526fcd",
+      "name": "📚 Cómo usar este workflow"
+    },
+    {
+      "parameters": {
+        "content": "## 🎚️ Top-K = 4 · Minimum Score = 0.75\n\n**Top-K = 4**: el manual tiene 10 artículos cortos — 4 fragmentos alcanzan para cubrir una pregunta puntual sin inflar el prompt con contenido irrelevante (cada artículo son ~1-2 chunks de 400 caracteres).\n\n**Minimum Score = 0.75**: prioriza precisión sobre cobertura — si ningún fragmento supera ese umbral de similitud semántica, el agente no fuerza una respuesta y aplica la regla \"No sé\", evitando alucinar una política que no existe.\n\n📸 Esto es lo que hay que capturar para la Pieza 2 del PDF.",
+        "height": 280,
+        "width": 460,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ],
+      "id": "3d882097-24c5-4cb2-84ba-40b4403a897c",
+      "name": "Sticky · Top-K y Minimum Score"
+    },
+    {
+      "parameters": {
+        "content": "## 🧪 5 preguntas ciegas sugeridas (con sinónimos/informal)\n\n1. \"¿Cuántos días me tocan según mi antigüedad?\" → Art. 1\n2. \"¿Con cuánta anticipación tengo que avisar?\" → Art. 3\n3. \"¿Puedo cortar mis vacaciones en 3 partes?\" → Art. 5 (dice hasta 2 — buen caso límite)\n4. \"¿Qué pasa si pido más días de los que tengo?\" → Art. 8\n5. \"¿Tengo licencia por estudio para rendir examen?\" → NO está en el manual — caso para la regla \"No sé\"\n\nAdaptalas si cambiás el documento fuente — mantené al menos 1 pregunta sin respuesta real (como la 5).",
+        "height": 320,
+        "width": 480,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        960,
+        0
+      ],
+      "id": "3eb794ce-0519-4ae9-8ba7-ffdb84f9dbee",
+      "name": "Sticky · 5 Preguntas Ciegas Sugeridas"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "openai/gpt-oss-120b",
+          "mode": "list",
+          "cachedResultName": "openai/gpt-oss-120b"
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 600
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -160,
+        400
+      ],
+      "id": "8b434fb4-88d2-4e5e-8aa2-eed7859080ee",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "0daXamBsF7ZGhDBh",
+          "name": "OpenAI account 2"
+        }
+      },
+      "notes": "Si esto tampoco anda, cambiá a openai/gpt-oss-120b (mismo modelo que ya funciona en Worker_Redaccion)."
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-embedding-001"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        208,
+        544
+      ],
+      "id": "a3fa3095-6feb-4ac0-8f02-8594cc21eaf9",
+      "name": "🔢 Embeddings Google Gemini",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "nSjeVtN1pD92RPU0",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "notes": "Mismo modelo que en el workflow de Ingesta — obligatorio, si no los vectores no son comparables."
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Busca información textual dentro del Manual de Políticas de Licencias y Vacaciones de la empresa (días acumulados, procedimiento de solicitud, período de carencia, fraccionamiento, licencias extraordinarias, reintegro anticipado). Usala SIEMPRE que el empleado pregunte por una política, plazo, condición o procedimiento concreto — nunca respondas ese tipo de preguntas de memoria.",
+        "memoryKey": "manual_licencias_vacaciones_kb"
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.3,
+      "position": [
+        272,
+        416
+      ],
+      "id": "3b910510-f9b0-470e-82b5-56c03dd342c0",
+      "name": "🔎 Vector Store Retrieve Tool"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.query }}",
+        "options": {
+          "systemMessage": "Sos el asistente virtual de RRHH para consultas sobre licencias y vacaciones. Tenés acceso a la herramienta 'consultar_manual_licencias'. Reglas OBLIGATORIAS de grounding documental:\n\n1. Antes de responder cualquier pregunta sobre una política, plazo o procedimiento de licencias/vacaciones, consultá SIEMPRE la herramienta 'consultar_manual_licencias' primero.\n2. Basá el 100% de tu respuesta ÚNICAMENTE en los fragmentos que te devuelve la herramienta. Nunca completes con conocimiento general, supuestos, ni información que no esté en esos fragmentos.\n3. Regla de oro de contingencia: si la herramienta no devuelve ningún fragmento relevante para la pregunta, tu respuesta tiene que decir textualmente 'No sé' — seguido de una breve aclaración de que no figura en la documentación disponible. NUNCA inventes ni infieras una política que no esté en los fragmentos recuperados.\n4. Cuando cites una política, mencioná de forma natural en qué artículo del manual se basa (ej. 'según el Artículo 5 de fraccionamiento...').\n5. Sé breve y directo — respondé como lo haría un agente de RRHH real, no como un buscador.",
+          "maxIterations": 6
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        16,
+        208
+      ],
+      "id": "ee26661b-886d-4208-a505-29df51df10c9",
+      "name": "AI Agent RAG - Tools Agent"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "session_id"
+            },
+            {
+              "name": "query"
+            },
+            {
+              "name": "empleado_ID"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -208,
+        208
+      ],
+      "id": "837b6412-fab7-4721-8e02-aaf08ef367cd",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "crf1",
+              "name": "status",
+              "value": "success",
+              "type": "string"
+            },
+            {
+              "id": "crf2",
+              "name": "data",
+              "value": "={{ { respuesta_politica: $json.output, empleado_ID: $('Execute Workflow Trigger').item.json.empleado_ID } }}",
+              "type": "object"
+            },
+            {
+              "id": "crf3",
+              "name": "error_code",
+              "value": null,
+              "type": "string"
+            },
+            {
+              "id": "crf4",
+              "name": "message",
+              "value": "Consulta de política respondida.",
+              "type": "string"
+            },
+            {
+              "id": "crf5",
+              "name": "retryable",
+              "value": false,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        208
+      ],
+      "id": "23aa5865-8678-4d89-ab49-045837cf123f",
+      "name": "Formatear Salida"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent RAG - Tools Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔢 Embeddings Google Gemini": {
+      "ai_embedding": [
+        [
+          {
+            "node": "🔎 Vector Store Retrieve Tool",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔎 Vector Store Retrieve Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent RAG - Tools Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent RAG - Tools Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent RAG - Tools Agent": {
+      "main": [
+        [
+          {
+            "node": "Formatear Salida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "2da3018e-0909-40ab-ab03-a7aedee3afe2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "971c7d1a0870c5402daced6091d65ef2a98bf7cf01af8640ad658b5b54739728"
+  },
+  "id": "T9WOHoE8O8d3f7LT",
+  "tags": []
+}

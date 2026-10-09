@@ -1,0 +1,145 @@
+{
+  "name": "Worker_Redaccion_TF",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "session_id"
+            },
+            {
+              "name": "insight",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        288,
+        240
+      ],
+      "id": "d4e4e302-30c8-44d9-a548-70c66fe6c8ab",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "openai/gpt-oss-120b",
+          "mode": "list",
+          "cachedResultName": "openai/gpt-oss-120b"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        464,
+        432
+      ],
+      "id": "dc818d6d-33dd-4f84-9469-a75713d50cf5",
+      "name": "Chat Model Redactor",
+      "credentials": {
+        "openAiApi": {
+          "id": "0daXamBsF7ZGhDBh",
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($('Execute Workflow Trigger').first().json.insight) }}",
+        "options": {
+          "systemMessage": "Sos el redactor de respuestas del sistema de automatización interna de la empresa. Recibís un objeto JSON con el resultado de un especialista (RRHH o Soporte) y tu única tarea es convertirlo en una respuesta breve, natural y profesional en español, de máximo 3 oraciones.\n\nReglas estrictas:\n- No inventes ningún dato que no esté presente en el JSON recibido.\n- No menciones palabras técnicas como \"JSON\", \"worker\", \"sistema\" o \"base de datos\".\n- Si status es \"error\" y el motivo es \"descripcion_vacia\", respondé: \"Necesito que me cuentes brevemente cuál es el problema para poder crear el ticket.\"\n\nCasos de RRHH — fijate en data.tipo y usá EXACTAMENTE esta redacción, completando XX con data.dias_disponibles:\n- Si data.tipo es \"consulta\": \"Tus días pendientes de vacaciones son XX.\"\n- Si data.tipo es \"solicitud_pendiente\": \"Tu solicitud (data.solicitud_ID) quedó registrada y está pendiente de aprobación.\"\n\n- Si data.tipo es \"solicitud_pendiente\" y data.excede_saldo es false: \"Tu solicitud (data.solicitud_ID) quedó registrada y está pendiente de aprobación.\"\n- Si data.tipo es \"solicitud_pendiente\" y data.excede_saldo es true: \"Tus días disponibles son data.dias_disponibles y pediste data.dias_solicitados, por lo que el pedido excede tu saldo. Igual registré tu solicitud (data.solicitud_ID) para que la decisión la tome tu superior.\"\n\nExcepción a la política (revisar SIEMPRE antes de aplicar las reglas de arriba): si data.es_excepcion_a_politica es true, primero citá textualmente data.cita_politica_excepcion (explicando por qué normalmente no correspondería), y después agregá: \"De todos modos, derivé tu pedido a tu superior — Solicitud nro. data.solicitud_ID.\" Si además data.excede_saldo es true, mencioná en una oración los días disponibles y los solicitados. Máximo 3 oraciones en total.\nCaso de Soporte:\n- Si el JSON incluye ticket_ID, confirmá que el ticket fue creado y que el equipo de soporte lo va a atender.\n\nQueda prohibido el uso de lenguaje inclusivo con \"@\" o \"x\".",
+          "maxIterations": 2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        512,
+        240
+      ],
+      "id": "4332ada9-a66f-49dd-bea5-9044d943f615",
+      "name": "Redactor de Respuesta"
+    },
+    {
+      "parameters": {
+        "content": "Worker_Redaccion \nAhora distingue 3 mensajes de RRHH según data.tipo:\nconsulta / rechazo_automatico / solicitud_pendiente — cada\nuno con su redacción exacta pedida, sin mezclarlos.\n",
+        "height": 272,
+        "width": 166
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "4fc534a8-140c-4a83-8ccb-89945e40006b",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        848,
+        240
+      ],
+      "id": "26831479-470b-4c64-8d07-b09de0fd876a",
+      "name": "🏁 Salida del Worker R"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Redactor de Respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model Redactor": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Redactor de Respuesta",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redactor de Respuesta": {
+      "main": [
+        [
+          {
+            "node": "🏁 Salida del Worker R",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "acdfce64-6546-4606-a635-d3ec7c6153ef",
+  "meta": {
+    "instanceId": "971c7d1a0870c5402daced6091d65ef2a98bf7cf01af8640ad658b5b54739728"
+  },
+  "id": "IbNuQPCtmuHv5YsY",
+  "tags": []
+}

@@ -1,0 +1,199 @@
+{
+  "name": "Ingesta_Documental_TF",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 📥 Ingesta (correr 1 sola vez)\n\nCarga el Manual de Licencias y Vacaciones, lo trocea con el Text Splitter, genera embeddings reales (Google Gemini, gratis) y los guarda en el Vector Store en memoria bajo la clave `manual_licencias_vacaciones_kb`.\n\nSi cambiás el documento fuente, volvé a correr este workflow para re-indexar (clearStore:true — reemplaza lo anterior, no acumula duplicados).\n\n⚠️ El In-Memory Vector Store vive en la RAM del proceso de n8n: si reiniciás la instancia, se vacía. Corré este workflow, y SIN reiniciar n8n, corré después el de Consulta.",
+        "height": 320,
+        "width": 500,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "44226606-5fc8-4630-ad36-0f2f688998ca",
+      "name": "📚 Cómo usar este workflow"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ],
+      "id": "78e12e44-b12e-4c94-b81e-9e8d2ee123de",
+      "name": "▶️ Ingestar Documento (correr 1 sola vez)"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "doc1",
+              "name": "texto",
+              "type": "string",
+              "value": "MANUAL DE POLÍTICAS DE LICENCIAS Y VACACIONES — RECURSOS HUMANOS\n\nArtículo 1 - Acumulación de días: cada empleado acumula días de vacaciones según su antigüedad, informados individualmente en su ficha de legajo (campo Dias_Vacaciones_Disponibles del sistema). El saldo se actualiza automáticamente al aprobarse cada solicitud.\n\nArtículo 2 - Procedimiento de solicitud: toda solicitud de vacaciones debe canalizarse a través del asistente virtual de RRHH, indicando el ID de empleado (formato EMP-XXX) y la cantidad de días solicitados. La solicitud queda registrada con estado 'pendiente' hasta la aprobación del manager directo.\n\nArtículo 3 - Anticipación mínima: se recomienda notificar la solicitud con un mínimo de 10 días corridos de anticipación a la fecha de inicio deseada, para permitir la reorganización de tareas del equipo.\n\nArtículo 4 - Período de carencia: los empleados con menos de 90 días corridos de antigüedad desde su fecha de ingreso no acumulan días de vacaciones ordinarias, aunque sí pueden solicitar licencias extraordinarias según el Artículo 6.\n\nArtículo 5 - Fraccionamiento: las vacaciones pueden fraccionarse en hasta 2 períodos por año calendario, siempre que cada fracción sea de al menos 5 días corridos. No se aceptan fracciones de un solo día.\n\nArtículo 6 - Licencias extraordinarias: por matrimonio (10 días corridos), por nacimiento o adopción de hijo/a (15 días corridos), por fallecimiento de familiar directo (5 días corridos), por mudanza (2 días corridos). Estas licencias no descuentan del saldo de vacaciones ordinarias y no requieren el período de carencia del Artículo 4.\n\nArtículo 7 - Modalidad de trabajo: el saldo y el cómputo de días de vacaciones es idéntico para empleados presenciales, remotos e híbridos — la modalidad de trabajo no modifica la política.\n\nArtículo 8 - Rechazo automático por saldo insuficiente: si la cantidad de días solicitados supera el saldo disponible, el sistema informa el saldo real y no genera una solicitud pendiente de aprobación — el empleado debe ajustar su pedido a los días disponibles.\n\nArtículo 9 - Reintegro anticipado: el empleado puede reintegrarse antes de finalizar su período de vacaciones aprobado notificando a su manager con al menos 48 horas de anticipación, sin necesidad de justificar el motivo.\n\nArtículo 10 - Consultas de saldo: el empleado puede consultar su saldo de días disponibles en cualquier momento a través del asistente virtual, sin que esto genere ninguna solicitud ni requiera aprobación."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        400
+      ],
+      "id": "e9d59569-7652-4408-a15d-5c99752c51ca",
+      "name": "📄 Documento Fuente (Manual de Licencias y Vacaciones)",
+      "notes": "PLACEHOLDER de contenido real — reemplazá este texto por el manual definitivo de la empresa cuando lo tengan redactado, o cambiá este nodo por 'Read/Write Files from Disk' + 'Extract from File' si preferís partir de un PDF/DOCX real. La estructura con artículos numerados está pensada para que el chunking preserve jerarquía."
+    },
+    {
+      "parameters": {
+        "chunkSize": 400,
+        "chunkOverlap": 50,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        672,
+        560
+      ],
+      "id": "f3172116-85fc-42c8-8fe5-bdf96c5447e2",
+      "name": "✂️ Text Splitter (400/50)"
+    },
+    {
+      "parameters": {
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "fuente",
+                "value": "Manual de Licencias y Vacaciones — RRHH v1"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1,
+      "position": [
+        672,
+        400
+      ],
+      "id": "d0865c83-161d-4fbd-8257-abbe24a73b66",
+      "name": "📚 Default Data Loader (parsing real)"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-embedding-001"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        448,
+        560
+      ],
+      "id": "d7e029bb-b137-40d7-b05e-6c2a318bb9e0",
+      "name": "🔢 Embeddings Google Gemini",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "nSjeVtN1pD92RPU0",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "notes": "TIENE que ser el mismo modelo de embeddings que el workflow de Consulta — si no, los vectores no son comparables entre sí y la búsqueda no encuentra nada."
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "memoryKey": "manual_licencias_vacaciones_kb",
+        "clearStore": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.3,
+      "position": [
+        448,
+        400
+      ],
+      "id": "425449de-733d-47b0-89fa-8679ecf34533",
+      "name": "🗄️ In-Memory Vector Store · Insertar",
+      "notes": "clearStore:true — cada corrida reemplaza la base anterior (evita duplicados mientras probás). Cambialo a false si vas a ir sumando documentos sin borrar los previos."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "▶️ Ingestar Documento (correr 1 sola vez)": {
+      "main": [
+        [
+          {
+            "node": "📄 Documento Fuente (Manual de Licencias y Vacaciones)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 Documento Fuente (Manual de Licencias y Vacaciones)": {
+      "main": [
+        [
+          {
+            "node": "🗄️ In-Memory Vector Store · Insertar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✂️ Text Splitter (400/50)": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "📚 Default Data Loader (parsing real)",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📚 Default Data Loader (parsing real)": {
+      "ai_document": [
+        [
+          {
+            "node": "🗄️ In-Memory Vector Store · Insertar",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔢 Embeddings Google Gemini": {
+      "ai_embedding": [
+        [
+          {
+            "node": "🗄️ In-Memory Vector Store · Insertar",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "cb2ad327-31ad-46f2-b172-5e3bea9c055c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "971c7d1a0870c5402daced6091d65ef2a98bf7cf01af8640ad658b5b54739728"
+  },
+  "id": "VaBRNGzKEypXbfNF",
+  "tags": []
+}

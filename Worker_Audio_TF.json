@@ -1,0 +1,505 @@
+{
+  "name": "Worker_Audio_TF",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Checkpoint 6 — Circuito Cerrado de Voz (Voice AI)\nCanal elegido: Telegram (más simple de configurar/probar que WhatsApp\nBusiness API, mismo rol funcional que pide la consigna).\n\nAgente propio y autocontenido para este checkpoint — reutiliza la\nmisma base de conocimiento RAG del Módulo 5 (mismo memoryKey), pero\nno pasa por el Manager completo (RRHH/Soporte) para no arrastrar la\ncomplejidad de 3 canales a un checkpoint que evalúa específicamente\nel circuito de audio. Si querés integrarlo como 4to canal del\nManager más adelante, avisame.\n\n⚠️ ElevenLabs NO es un nodo nativo de n8n — es un nodo de comunidad\nque en muchos planes Cloud no se puede instalar. Para no depender de\neso, la síntesis de voz se hace con un HTTP Request directo a la API\nde ElevenLabs — mismo resultado, sin instalar nada.",
+        "height": 340,
+        "width": 620,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "3be69093-8c1e-40ea-a4a2-2ed9fa295c86",
+      "name": "📚 Overview del Checkpoint 6"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        400
+      ],
+      "id": "cd4e4809-9431-4df4-91d6-77a1c7a5df21",
+      "name": "📱 Telegram Trigger · Nota de Voz Entrante",
+      "webhookId": "b270c715-15b6-4b3e-b7cd-987de3a36b00",
+      "credentials": {
+        "telegramApi": {
+          "id": "eeG9ihvJwjw5WXUx",
+          "name": "Telegram account 3"
+        }
+      },
+      "notes": "Interceptación binaria de entrada (Paso 1 del brief). Requiere credencial de bot de Telegram (creado con @BotFather)."
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.voice.file_id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        400
+      ],
+      "id": "15c89a3b-b7c4-4941-87a4-eb250ba1f400",
+      "name": "⬇️ Descargar Audio de Telegram",
+      "webhookId": "e237cb12-8512-4454-8d1f-b61f3a6478fd",
+      "credentials": {
+        "telegramApi": {
+          "id": "eeG9ihvJwjw5WXUx",
+          "name": "Telegram account 3"
+        }
+      },
+      "notes": "Telegram Trigger solo entrega un file_id, no el binario — hay que descargarlo antes de mandarlo a Whisper. Queda en la propiedad binaria 'data' por defecto (coincide con lo que pide el Paso 3 del brief)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "v6c1",
+              "leftValue": "={{ ($json.text || '').trim().length > 2 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        400
+      ],
+      "id": "d08974bb-5694-43f0-b543-d6326c19ccea",
+      "name": "🛡️ IF · ¿Transcripción Válida?",
+      "notes": "Ruta de contingencia no-code (Paso 10 del brief). Si Whisper devuelve texto vacío o casi vacío (audio corrupto / puro ruido de fondo), desvía sin romper el flujo."
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('📱 Telegram Trigger · Nota de Voz Entrante').item.json.message.chat.id }}",
+        "text": "No pude entender el audio — puede que tenga mucho ruido de fondo o esté cortado. ¿Podés grabarlo de nuevo, más cerca del micrófono?",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        896,
+        320
+      ],
+      "id": "0996b266-2ec7-42c3-b0b7-19080a65f027",
+      "name": "⚠️ Avisar Audio No Entendido",
+      "webhookId": "5505c6b1-cd3d-4bbb-8147-bf867e3675e6",
+      "credentials": {
+        "telegramApi": {
+          "id": "eeG9ihvJwjw5WXUx",
+          "name": "Telegram account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-embedding-001"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        896,
+        624
+      ],
+      "id": "7e624e6a-b848-4f5c-84f1-541db31d2243",
+      "name": "🔢 Embeddings Google Gemini",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "nSjeVtN1pD92RPU0",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "notes": "Mismo modelo (gemini-embedding-001) y mismo memoryKey que ingesta_documental_modulo6 — reutiliza la base de conocimiento del Módulo 5, no se vuelve a cargar nada acá."
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Busca información textual dentro del Manual de Políticas de Licencias y Vacaciones de la empresa. Usala SIEMPRE que la consulta hablada sea sobre una política, plazo o procedimiento concreto.",
+        "memoryKey": "manual_licencias_vacaciones_kb"
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.3,
+      "position": [
+        896,
+        768
+      ],
+      "id": "34f6e039-4a83-49a3-9031-bcaaa4ba9da9",
+      "name": "🔎 Vector Store Retrieve Tool"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-4-5-20250929",
+          "mode": "list",
+          "cachedResultName": "Claude Sonnet 4.5"
+        },
+        "options": {
+          "maxTokensToSample": 300
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        1120,
+        624
+      ],
+      "id": "bc6534c9-e69d-4ab8-ac96-fb3af14083ef",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "JyWxzw01lz1bdbp5",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "Sos el asistente de voz de RRHH de la empresa, en modo Tools Agent. El empleado te habla por una nota de voz de Telegram; tu respuesta también se va a convertir a voz.\n\nRegla financiera OBLIGATORIA (contención de costos de la API de audio): tu respuesta completa, en TODOS los casos, no puede superar los 200 caracteres. Sé directo, sin rodeos, sin saludos largos. Si la respuesta completa no entra en 200 caracteres, resumí lo esencial y ofrecé seguir por chat de texto para el detalle completo.\n\nSi te preguntan por una política de licencias o vacaciones, usá SIEMPRE la herramienta 'consultar_manual_licencias' antes de responder, y basate únicamente en lo que te devuelve. Si no encuentra nada relevante, respondé 'No sé, no figura en la documentación disponible.'\n\nQueda prohibido el uso de lenguaje inclusivo con \"@\" o \"x\".",
+          "maxIterations": 4
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        896,
+        480
+      ],
+      "id": "b0dd5440-8c0d-47eb-ba25-8630418f2e77",
+      "name": "🧠 AI Agent de Voz - Tools Agent",
+      "notes": "Cerebro del Sistema (Paso 5/Punto 3 de la rúbrica). Vinculado directo a la salida de texto limpia de Whisper. Contención financiera de 200 caracteres en el System Prompt (Paso 8/Punto 4 de la rúbrica)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "audio/mpeg"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.output, model_id: \"eleven_multilingual_v2\", voice_settings: { stability: 0.5, similarity_boost: 0.75 } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        480
+      ],
+      "id": "89d7eb61-e524-4428-b905-5bb294bfd0b7",
+      "name": "🔊 ElevenLabs · Voz del Agente (HTTP Request)",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "OSbHmlgrGR8eI9Dr",
+          "name": "Header Auth account 6"
+        }
+      },
+      "notes": "Voz del Agente (Paso 6-7 / Punto 5 de la rúbrica). model_id = eleven_multilingual_v2 (Eleven Multilingual). stability = Stability (Estabilidad emocional). similarity_boost = lo que la consigna llama 'Clarity' (en la doc oficial de ElevenLabs se llama Similarity/Clarity Boost). voice_id de ejemplo (Rachel) — reemplazar por la voz institucional real. Devuelve el audio como binario en la propiedad 'data'."
+    },
+    {
+      "parameters": {
+        "operation": "sendAudio",
+        "chatId": "={{ $('📱 Telegram Trigger · Nota de Voz Entrante').item.json.message.chat.id }}",
+        "binaryData": true,
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1344,
+        480
+      ],
+      "id": "375b8ec2-37de-4716-a194-b8c31746aabd",
+      "name": "📤 Telegram · Send Audio (Salida Multimedia)",
+      "webhookId": "b27cc4dc-f49c-4f56-8186-67b79640aa73",
+      "credentials": {
+        "telegramApi": {
+          "id": "eeG9ihvJwjw5WXUx",
+          "name": "Telegram account 3"
+        }
+      },
+      "notes": "Nodo final del canal de mensajería (Paso 9 / Punto 6 de la rúbrica). Send Audio — Telegram no tiene una operación 'Send Voice' separada en n8n; Send Audio cumple igual (la consigna acepta 'Send Voice o Send Audio')."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Marco de Compliance y Destruccion Binaria (Paso 12 / Punto 8 de la rubrica).\n// El audio nunca se escribe a disco ni a ninguna base de datos en todo el\n// flujo -- vive solo en la memoria volatil de esta ejecucion (el binario de\n// Telegram y el de ElevenLabs). Este nodo lo hace explicito: al llegar aca\n// el mensaje ya se envio, y se descarta toda referencia binaria del item\n// antes de que la ejecucion termine, para que no quede accesible ni siquiera\n// en el log de ejecucion mas de lo necesario.\nconst { binary, ...jsonSinBinario } = $input.item;\nreturn [{ json: { ...jsonSinBinario.json, audio_procesado: true, audio_destruido: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        480
+      ],
+      "id": "b57a0487-8b58-4141-b5dd-74084f00da72",
+      "name": "🔒 Compliance · Destruir Binario de Voz"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [ { text: \"Transcribí exactamente lo que se dice en este audio, en español. Devolvé ÚNICAMENTE el texto transcripto plano, sin comentarios ni formato adicional.\" }, { inline_data: { mime_type: \"audio/ogg\", data: $json.audio_base64 } } ] }] }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        400
+      ],
+      "id": "9d4a6f8e-f1de-459c-8869-cf0cc3d6dae0",
+      "name": "🎤 Transcribir Audio con Gemini",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "OSbHmlgrGR8eI9Dr",
+          "name": "Header Auth account 6"
+        }
+      },
+      "notes": "Reemplaza a OpenAI Whisper (sin acceso a whisper-1). Idioma indicado en el prompt de texto."
+    },
+    {
+      "parameters": {
+        "jsCode": "const texto = $json.candidates?.[0]?.content?.parts?.[0]?.text || '';\nreturn [{ json: { text: texto.trim() } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        400
+      ],
+      "id": "ad288711-b8fb-4544-a1b2-7963b0bdc6db",
+      "name": "📝 Extraer Texto Transcripto"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Convierte el binario del audio a base64 en un paso aparte -- hacerlo\n// directo dentro de la expresion del HTTP Request es fragil en n8n\n// (el campo terminaba llegando vacio). Este patron es mas confiable.\nconst buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst base64String = buffer.toString('base64');\nreturn [{ json: { ...$json, audio_base64: base64String } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        400
+      ],
+      "id": "870881dc-afe6-465e-a9b8-e6ef7e55eaf5",
+      "name": "🔡 Convertir Audio a Base64"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "📱 Telegram Trigger · Nota de Voz Entrante": {
+      "main": [
+        [
+          {
+            "node": "⬇️ Descargar Audio de Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⬇️ Descargar Audio de Telegram": {
+      "main": [
+        [
+          {
+            "node": "🔡 Convertir Audio a Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🛡️ IF · ¿Transcripción Válida?": {
+      "main": [
+        [
+          {
+            "node": "🧠 AI Agent de Voz - Tools Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "⚠️ Avisar Audio No Entendido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔢 Embeddings Google Gemini": {
+      "ai_embedding": [
+        [
+          {
+            "node": "🔎 Vector Store Retrieve Tool",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔎 Vector Store Retrieve Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "🧠 AI Agent de Voz - Tools Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🧠 AI Agent de Voz - Tools Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 AI Agent de Voz - Tools Agent": {
+      "main": [
+        [
+          {
+            "node": "🔊 ElevenLabs · Voz del Agente (HTTP Request)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔊 ElevenLabs · Voz del Agente (HTTP Request)": {
+      "main": [
+        [
+          {
+            "node": "📤 Telegram · Send Audio (Salida Multimedia)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📤 Telegram · Send Audio (Salida Multimedia)": {
+      "main": [
+        [
+          {
+            "node": "🔒 Compliance · Destruir Binario de Voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎤 Transcribir Audio con Gemini": {
+      "main": [
+        [
+          {
+            "node": "📝 Extraer Texto Transcripto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📝 Extraer Texto Transcripto": {
+      "main": [
+        [
+          {
+            "node": "🛡️ IF · ¿Transcripción Válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔡 Convertir Audio a Base64": {
+      "main": [
+        [
+          {
+            "node": "🎤 Transcribir Audio con Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "1c605b3c-c6ea-41a7-9cfd-deead616ac98",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "971c7d1a0870c5402daced6091d65ef2a98bf7cf01af8640ad658b5b54739728"
+  },
+  "id": "fNcBmBPnOl8qGQqt",
+  "tags": []
+}
